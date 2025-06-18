@@ -10,4 +10,5 @@
 - `save_to_json` now converts `paid` and `unpaid` lists into single comma-separated strings before writing the JSON, making each client's dates appear on one line.
 - Added `sessions_statistics.py`: read-only utility to compute aggregate stats (total clients/sessions, ratios, top unpaid, top remaining, extra notes count) from the generated JSON output.
 - Makefile: added `stats` target to run `sessions_statistics.py` and updated help.
-- Added `_is_numeric_string` helper in `extract_sessions.py` to skip rows where the detected client name is a pure number (e.g., `200`, `230.0`). This prevents numeric strings from being treated as client names. 
+- Added `_is_numeric_string` helper in `extract_sessions.py` to skip rows where the detected client name is a pure number (e.g., `200`, `230.0`). This prevents numeric strings from being treated as client names.
+- Improved `determine_year_from_date` heuristic: now checks if the day/month are > threshold_days (default 183) in past or future relative to reference date, preventing old dates like 10.06.2024 from being mis-labelled as 2025. 

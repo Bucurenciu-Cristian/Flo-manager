@@ -17,19 +17,32 @@ def _is_numeric_string(value: str) -> bool:
     txt = value.strip().replace(',', '').replace('.', '')
     return txt.isdigit()
 
-def determine_year_from_date(day, month, current_date=date(2025, 6, 18)):
+def determine_year_from_date(day, month, current_date=date(2025, 6, 18), threshold_days: int = 183):
     """
-    Intelligently determine year based on timeline logic.
-    - Current date is 18.6.2025 (today)
-    - Any date after 18.6 chronologically must be from 2024
-    - Dates before/on 18.6 are from 2025
+    Determine the correct year for a session date given only day & month.
+
+    Heuristic:
+    1. Try the current year first. If that full date is **after** today → it must belong to the *previous* year.
+    2. Otherwise, if that date is *far* in the past (older than `threshold_days`), assume it belongs to the previous year as well.
+       This handles sessions logged more than ~6 months ago (e.g. today=18-Jun-2025, session 10-Jun could be 2024).
+    3. In all other cases keep the current year.
     """
-    if month > current_date.month or (month == current_date.month and day > current_date.day):
-        # This date is chronologically after today, so it must be 2024
-        return 2024
-    else:
-        # This date is chronologically before/on today, so it's 2025
-        return 2025
+    # Build candidate date in the current year
+    try:
+        candidate_this_year = date(current_date.year, month, day)
+    except ValueError:
+        # Fallback: if invalid (e.g. 31 Feb) just return current year
+        return current_date.year
+
+    # If candidate is in the *future* relative to reference date -> last year
+    if candidate_this_year > current_date:
+        return current_date.year - 1
+
+    # If candidate is too far in the past -> last year
+    if (current_date - candidate_this_year).days > threshold_days:
+        return current_date.year - 1
+
+    return current_date.year
 
 def enhance_session_dates(sessions_list):
     """
