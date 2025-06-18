@@ -146,6 +146,7 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
         paid_sessions = []
         unpaid_sessions = []
         extra_data = []  # Store text from green cells
+        undated_paid_count = 0  # Count green cells with no date (pre-paid sessions remaining)
         
         # Look for session data in the next 50 rows after client name
         actual_index = start_from + i
@@ -255,15 +256,19 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
                         except Exception as e:
                             print(f"  Could not parse date: {date_str} - {e}")
                     else:
-                        print(f"  No date found for {session_type} cell in column {col}")
+                        # No date found – special handling for paid cells (green)
+                        if session_type == "paid":
+                            undated_paid_count += 1  # Treat as an already purchased session without specified date
+                        print(f"  No date found for {session_type} cell in column {col}" + (" (counting as paid)" if session_type == "paid" else ""))
         
         # Enhance dates with proper years and chronological sorting
         enhanced_paid = enhance_session_dates(paid_sessions)
         enhanced_unpaid = enhance_session_dates(unpaid_sessions)
         
-        # Calculate stats
-        total = len(enhanced_paid) + len(enhanced_unpaid)
-        packages_needed = (total + 9) // 10  # Round up to nearest 10
+        # Calculate stats (include undated paid sessions in totals)
+        total_paid_sessions = len(enhanced_paid) + undated_paid_count
+        total = total_paid_sessions + len(enhanced_unpaid)
+        packages_needed = (total + 9) // 10  # Default package size = 10
         remaining = (packages_needed * 10) - total
         
         # Add client data with enhanced dates
@@ -272,7 +277,7 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
             "unpaid": enhanced_unpaid,
             "stats": {
                 "total": total,
-                "paid": len(enhanced_paid),
+                "paid": total_paid_sessions,
                 "unpaid": len(enhanced_unpaid),
                 "remaining": remaining
             }
@@ -285,7 +290,7 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
         clients_data["clients"][client_name] = client_data
         
         extra_count = len(extra_data) if extra_data else 0
-        print(f"  Summary: {len(paid_sessions)} paid, {len(unpaid_sessions)} unpaid, {total} total" + (f", {extra_count} with extra text" if extra_count > 0 else ""))
+        print(f"  Summary: {total_paid_sessions} paid, {len(unpaid_sessions)} unpaid, {total} total" + (f", {extra_count} with extra text" if extra_count > 0 else ""))
     
     return clients_data
 
