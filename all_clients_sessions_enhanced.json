@@ -5756,8 +5756,9 @@
   },
   "updated": "2025-06-18",
   "date_enhancement": {
-    "enhanced_on": "2025-06-18 20:39:55",
+    "enabled": true,
     "reference_date": "2025-06-18",
-    "logic": "Dates after 18.6 are 2024, dates before/on 18.6 are 2025"
+    "logic": "Dates after 18.6 are 2024, dates before/on 18.6 are 2025",
+    "format": "DD.MM.YYYY"
   }
 }

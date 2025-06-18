@@ -6,7 +6,59 @@
 
 import openpyxl
 import json
-from datetime import datetime
+from datetime import datetime, date
+
+def determine_year_from_date(day, month, current_date=date(2025, 6, 18)):
+    """
+    Intelligently determine year based on timeline logic.
+    - Current date is 18.6.2025 (today)
+    - Any date after 18.6 chronologically must be from 2024
+    - Dates before/on 18.6 are from 2025
+    """
+    if month > current_date.month or (month == current_date.month and day > current_date.day):
+        # This date is chronologically after today, so it must be 2024
+        return 2024
+    else:
+        # This date is chronologically before/on today, so it's 2025
+        return 2025
+
+def enhance_session_dates(sessions_list):
+    """
+    Enhance sessions with proper years and format as DD.MM.YYYY.
+    Also sort chronologically.
+    """
+    enhanced_sessions = []
+    
+    for date_str in sessions_list:
+        try:
+            parts = date_str.split('.')
+            if len(parts) == 2:
+                day = int(parts[0])
+                month = int(parts[1])
+                year = determine_year_from_date(day, month)
+                enhanced_date = f"{day:02d}.{month:02d}.{year}"
+                enhanced_sessions.append(enhanced_date)
+            else:
+                enhanced_sessions.append(date_str)  # Keep original if can't parse
+        except:
+            enhanced_sessions.append(date_str)  # Keep original if error
+    
+    # Sort chronologically
+    def date_sort_key(date_str):
+        try:
+            parts = date_str.split('.')
+            if len(parts) == 3:
+                day, month, year = int(parts[0]), int(parts[1]), int(parts[2])
+                return datetime(year, month, day)
+            elif len(parts) == 2:
+                day, month = int(parts[0]), int(parts[1])
+                year = determine_year_from_date(day, month)
+                return datetime(year, month, day)
+        except:
+            pass
+        return datetime(1900, 1, 1)  # Fallback
+    
+    return sorted(enhanced_sessions, key=date_sort_key)
 
 def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
     """
@@ -22,7 +74,13 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
     
     clients_data = {
         "clients": {},
-        "updated": datetime.now().strftime("%Y-%m-%d")
+        "updated": datetime.now().strftime("%Y-%m-%d"),
+        "date_enhancement": {
+            "enabled": True,
+            "reference_date": "2025-06-18",
+            "logic": "Dates after 18.6 are 2024, dates before/on 18.6 are 2025",
+            "format": "DD.MM.YYYY"
+        }
     }
     
     # Find all "Numele" positions
@@ -109,19 +167,23 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
                         except Exception as e:
                             print(f"  Could not parse date: {date_str} - {e}")
         
+        # Enhance dates with proper years and chronological sorting
+        enhanced_paid = enhance_session_dates(paid_sessions)
+        enhanced_unpaid = enhance_session_dates(unpaid_sessions)
+        
         # Calculate stats
-        total = len(paid_sessions) + len(unpaid_sessions)
+        total = len(enhanced_paid) + len(enhanced_unpaid)
         packages_needed = (total + 9) // 10  # Round up to nearest 10
         remaining = (packages_needed * 10) - total
         
-        # Add client data
+        # Add client data with enhanced dates
         clients_data["clients"][client_name] = {
-            "paid": paid_sessions,
-            "unpaid": unpaid_sessions,
+            "paid": enhanced_paid,
+            "unpaid": enhanced_unpaid,
             "stats": {
                 "total": total,
-                "paid": len(paid_sessions),
-                "unpaid": len(unpaid_sessions),
+                "paid": len(enhanced_paid),
+                "unpaid": len(enhanced_unpaid),
                 "remaining": remaining
             }
         }
@@ -141,14 +203,46 @@ if __name__ == "__main__":
         print("Extracting session data for ALL clients...")
         session_data = extract_client_sessions("excel.xlsx", max_clients=185, start_from=0)
         
-        # Save to JSON
-        save_to_json(session_data, "all_clients_sessions.json")
+        # Save to JSON with enhanced dates
+        save_to_json(session_data, "all_clients_sessions_enhanced.json")
         
-        # Print summary
-        print("\n=== SUMMARY ===")
+        # Print enhancement summary
+        total_clients = len(session_data['clients'])
+        total_sessions = sum(info['stats']['total'] for info in session_data['clients'].values())
+        year_2024_count = 0
+        year_2025_count = 0
+        
+        for client_data in session_data['clients'].values():
+            for session in client_data.get('paid', []) + client_data.get('unpaid', []):
+                if '2024' in session:
+                    year_2024_count += 1
+                elif '2025' in session:
+                    year_2025_count += 1
+        
+        print("\n🎯 EXTRACTION & ENHANCEMENT SUMMARY")
+        print("=" * 50)
+        print(f"✅ Total clients processed: {total_clients}")
+        print(f"✅ Total sessions extracted: {total_sessions}")
+        print(f"📅 Sessions from 2024: {year_2024_count} ({year_2024_count/total_sessions*100:.1f}%)")
+        print(f"📅 Sessions from 2025: {year_2025_count} ({year_2025_count/total_sessions*100:.1f}%)")
+        print(f"🗓️  Enhanced format: DD.MM.YYYY")
+        print(f"📊 Logic: Dates after 18.6 → 2024, dates before/on 18.6 → 2025")
+        
+        print(f"\n📋 Sample clients:")
+        sample_count = 0
         for name, info in session_data['clients'].items():
+            if sample_count >= 3:
+                break
             stats = info['stats']
-            print(f"{name}: {stats['total']} sessions ({stats['paid']} paid, {stats['unpaid']} unpaid)")
+            if stats['total'] > 0:
+                paid_sample = info['paid'][:2] if info['paid'] else []
+                unpaid_sample = info['unpaid'][:1] if info['unpaid'] else []
+                print(f"  {name}: {stats['total']} sessions")
+                if paid_sample:
+                    print(f"    Paid: {paid_sample}")
+                if unpaid_sample:
+                    print(f"    Unpaid: {unpaid_sample}")
+                sample_count += 1
         
     except Exception as e:
         print(f"Error: {e}")
