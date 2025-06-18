@@ -12,6 +12,11 @@ from datetime import datetime, date
 # NEW: global counter for processed clients
 processed_count = 0  # Will be updated by extract_client_sessions
 
+# Helper to detect purely numeric strings (integers or floats like "230" or "230.0")
+def _is_numeric_string(value: str) -> bool:
+    txt = value.strip().replace(',', '').replace('.', '')
+    return txt.isdigit()
+
 def determine_year_from_date(day, month, current_date=date(2025, 6, 18)):
     """
     Intelligently determine year based on timeline logic.
@@ -100,7 +105,7 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
         # Standard pattern: "Numele" in column B, client name in column C
         if cell_b.value and "Numele" in str(cell_b.value):
             client_name = cell_c.value
-            if client_name and str(client_name).strip() and str(client_name).strip() not in processed_clients:
+            if client_name and str(client_name).strip() and not _is_numeric_string(str(client_name)) and str(client_name).strip() not in processed_clients:
                 numele_positions.append((row, str(client_name).strip()))
                 processed_clients.add(str(client_name).strip())
         
@@ -108,12 +113,12 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
         elif cell_b.value and "Varsta si Greutatea" in str(cell_b.value):
             # Check column D (next column) for client name
             cell_d = ws.cell(row=row, column=4)
-            if cell_d.value and str(cell_d.value).strip() and str(cell_d.value).strip() not in processed_clients:
+            if cell_d.value and str(cell_d.value).strip() and not _is_numeric_string(str(cell_d.value)) and str(cell_d.value).strip() not in processed_clients:
                 numele_positions.append((row, str(cell_d.value).strip()))
                 processed_clients.add(str(cell_d.value).strip())
         
         # Also check if there's a client name directly in column C without "Numele" marker
-        elif cell_c.value and len(str(cell_c.value).strip()) > 2 and not str(cell_c.value).strip().isdigit():
+        elif cell_c.value and len(str(cell_c.value).strip()) > 2 and not _is_numeric_string(str(cell_c.value)):
             # This might be a client name in a different format
             potential_name = str(cell_c.value).strip()
             if potential_name not in processed_clients and not any(x in potential_name.lower() for x in ['numele', 'varsta', 'greutatea', 'data']):
