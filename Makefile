@@ -1,6 +1,6 @@
 # Makefile for Fitness Training Session Data Extraction Tool
 
-.PHONY: help extract extract-all extract-sample validate clean install test
+.PHONY: help extract extract-all extract-sample validate clean install test stats
 
 # Default target
 help:
@@ -13,6 +13,7 @@ help:
 	@echo "  validate-dates - Validate date enhancement"
 	@echo "  install      - Install required dependencies"
 	@echo "  test         - Run validation tests"
+	@echo "  stats        - Generate summary statistics from JSON"
 	@echo "  clean        - Remove generated files"
 	@echo "  backup       - Backup current data files"
 
@@ -73,6 +74,12 @@ backup:
 	@cp -f all_clients_sessions.json backups/all_clients_sessions_$(shell date +%Y%m%d_%H%M%S).json 2>/dev/null || true
 	@cp -f all_clients_sessions_enhanced.json backups/all_clients_sessions_enhanced_$(shell date +%Y%m%d_%H%M%S).json 2>/dev/null || true
 	@echo "✓ Backup complete"
+
+# Generate statistics
+stats:
+	@echo "Generating session statistics..."
+	python sessions_statistics.py
+	@echo "✓ Statistics complete"
 
 # Show project info
 info:
