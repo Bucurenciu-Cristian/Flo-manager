@@ -12,4 +12,5 @@
 - Makefile: added `stats` target to run `sessions_statistics.py` and updated help.
 - Added `_is_numeric_string` helper in `extract_sessions.py` to skip rows where the detected client name is a pure number (e.g., `200`, `230.0`). This prevents numeric strings from being treated as client names.
 - Improved `determine_year_from_date` heuristic: now checks if the day/month are > threshold_days (default 183) in past or future relative to reference date, preventing old dates like 10.06.2024 from being mis-labelled as 2025.
-- `enhance_session_dates` now enforces non-decreasing chronological order by bumping the year when a date would otherwise go backwards across the list. This leverages the fact that session dates are extracted in ascending order. 
+- `enhance_session_dates` now enforces non-decreasing chronological order by bumping the year when a date would otherwise go backwards across the list. This leverages the fact that session dates are extracted in ascending order.
+- Switched to dynamic `CURRENT_DATE_REF` (system today) for all date calculations and ensured no session date is pushed into the future; if a bumped year exceeds today it is reduced by 1. 

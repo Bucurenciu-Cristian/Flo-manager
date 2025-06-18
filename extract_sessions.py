@@ -12,12 +12,15 @@ from datetime import datetime, date
 # NEW: global counter for processed clients
 processed_count = 0  # Will be updated by extract_client_sessions
 
+# Reference date is now dynamic (today)
+CURRENT_DATE_REF = date.today()
+
 # Helper to detect purely numeric strings (integers or floats like "230" or "230.0")
 def _is_numeric_string(value: str) -> bool:
     txt = value.strip().replace(',', '').replace('.', '')
     return txt.isdigit()
 
-def determine_year_from_date(day, month, current_date=date(2025, 6, 18), threshold_days: int = 183):
+def determine_year_from_date(day, month, current_date: date = None, threshold_days: int = 183):
     """
     Determine the correct year for a session date given only day & month.
 
@@ -27,6 +30,9 @@ def determine_year_from_date(day, month, current_date=date(2025, 6, 18), thresho
        This handles sessions logged more than ~6 months ago (e.g. today=18-Jun-2025, session 10-Jun could be 2024).
     3. In all other cases keep the current year.
     """
+    if current_date is None:
+        current_date = CURRENT_DATE_REF
+
     # Build candidate date in the current year
     try:
         candidate_this_year = date(current_date.year, month, day)
@@ -53,7 +59,7 @@ def enhance_session_dates(sessions_list):
     """
     enhanced_sessions = []
     last_dt = None
-    current_date_ref = date(2025, 6, 18)
+    current_date_ref = CURRENT_DATE_REF
     current_year_guess = current_date_ref.year  # start with reference year
 
     for date_str in sessions_list:
@@ -71,10 +77,15 @@ def enhance_session_dates(sessions_list):
 
             # Ensure ascending order; if this date would go back in time, push to next year(s)
             if last_dt and dt < last_dt:
-                # increment year until chronological
                 while dt < last_dt:
                     year += 1
                     dt = datetime(year, month, day)
+
+            # Avoid future dates beyond today
+            today_dt = datetime.combine(CURRENT_DATE_REF, datetime.min.time())
+            while dt > today_dt:
+                year -= 1
+                dt = datetime(year, month, day)
             last_dt = dt
             enhanced_sessions.append(dt.strftime("%d.%m.%Y"))
         except Exception:
