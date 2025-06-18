@@ -196,6 +196,8 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
         unpaid_sessions = []
         extra_data = []  # Store text from green cells
         undated_paid_count = 0  # Count green cells with no date (pre-paid sessions remaining)
+        previous_completed = 0  # Number found left to the first green cell (historical sessions)
+        first_green_found = False
         
         # Look for session data in the next 50 rows after client name
         actual_index = start_from + i
@@ -235,6 +237,16 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
                                 pass
                             if not is_numeric:
                                 colored_cells.append((col, "paid", cleaned_text))
+                                # Capture previous completed sessions if this is the first green encountered for the client
+                                if not first_green_found and col > 4:
+                                    left_cell = ws.cell(row=row, column=col - 1)
+                                    if left_cell.value is not None:
+                                        try:
+                                            prev_val = str(left_cell.value).strip().replace(',', '.')
+                                            previous_completed = int(float(prev_val))
+                                        except ValueError:
+                                            previous_completed = 0
+                                    first_green_found = True
                             else:
                                 colored_cells.append((col, "paid", None))
                         else:
@@ -318,7 +330,7 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
         #   • paid_used: dated green cells (sessions already taken)
         #   • remaining: undated green cells (pre-paid sessions still available)
         #   • unpaid:    orange cells with dates (taken but unpaid)
-        paid_used = len(enhanced_paid)
+        paid_used = len(enhanced_paid) + previous_completed
         remaining = undated_paid_count  # Exactly how many undated paid sessions are left
         total_paid_sessions = paid_used + remaining
         total = total_paid_sessions + len(enhanced_unpaid)
@@ -343,7 +355,7 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
         clients_data["clients"][client_name] = client_data
         
         extra_count = len(extra_data) if extra_data else 0
-        print(f"  Summary: {paid_used} used, {remaining} remaining, {len(unpaid_sessions)} unpaid, {total} total" + (f", {extra_count} with extra text" if extra_count > 0 else ""))
+        print(f"  Summary: {paid_used} used (including prev {previous_completed}), {remaining} remaining, {len(unpaid_sessions)} unpaid, {total} total" + (f", {extra_count} with extra text" if extra_count > 0 else ""))
     
     return clients_data
 

@@ -13,4 +13,5 @@
 - Added `_is_numeric_string` helper in `extract_sessions.py` to skip rows where the detected client name is a pure number (e.g., `200`, `230.0`). This prevents numeric strings from being treated as client names.
 - Improved `determine_year_from_date` heuristic: now checks if the day/month are > threshold_days (default 183) in past or future relative to reference date, preventing old dates like 10.06.2024 from being mis-labelled as 2025.
 - `enhance_session_dates` refined: starts timeline in previous year, bumps forward when needed, and if the entire timeline is still one year and ends within 3 months of today it shifts to current year—fixing mixed-year edge cases like Adriana Bazarea.
-- Switched to dynamic `CURRENT_DATE_REF` (system today) for all date calculations and ensured no session date is pushed into the future; if a bumped year exceeds today it is reduced by 1. 
+- Switched to dynamic `CURRENT_DATE_REF` (system today) for all date calculations and ensured no session date is pushed into the future; if a bumped year exceeds today it is reduced by 1.
+- Extraction now reads numeric value immediately to the left of the first green cell per client as `previous_completed`; this is added to the `paid_used` count and reflected in summaries. 
