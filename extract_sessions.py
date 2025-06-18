@@ -6,6 +6,7 @@
 
 import openpyxl
 import json
+import copy
 from datetime import datetime, date
 
 # NEW: global counter for processed clients
@@ -300,8 +301,18 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
 
 def save_to_json(data, output_file="sessions_extracted.json"):
     """Save the extracted data to a JSON file."""
+    # Produce a shallow copy so we don't mutate the original in-memory results
+    data_copy = copy.deepcopy(data)
+
+    # Join paid/unpaid date lists into single comma-separated strings for compactness
+    for client_data in data_copy['clients'].values():
+        if isinstance(client_data.get('paid'), list):
+            client_data['paid'] = ", ".join(client_data['paid'])
+        if isinstance(client_data.get('unpaid'), list):
+            client_data['unpaid'] = ", ".join(client_data['unpaid'])
+
     with open(output_file, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=2, ensure_ascii=False)
+        json.dump(data_copy, f, indent=2, ensure_ascii=False)
     print(f"\nData saved to {output_file}")
 
 if __name__ == "__main__":

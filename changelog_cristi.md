@@ -6,4 +6,5 @@
   * Stats and on-screen summary now include these undated paid sessions.
 - Replaced old `remaining` logic (package rounding) with exact count of undated paid sessions.
   * Added `paid_used` and `paid_remaining` fields in stats for clarity.
-  * Updated summary log to reflect new breakdown. 
+  * Updated summary log to reflect new breakdown.
+- `save_to_json` now converts `paid` and `unpaid` lists into single comma-separated strings before writing the JSON, making each client's dates appear on one line. 
