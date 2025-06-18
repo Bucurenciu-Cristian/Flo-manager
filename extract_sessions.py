@@ -47,40 +47,41 @@ def determine_year_from_date(day, month, current_date=date(2025, 6, 18), thresho
 def enhance_session_dates(sessions_list):
     """
     Enhance sessions with proper years and format as DD.MM.YYYY.
-    Also sort chronologically.
+    Assumes the input list is in chronological order (oldest → newest).
+    We first guess the year for each date, then ensure the resulting
+    datetimes are non-decreasing; if a date would go backwards, we bump the year.
     """
     enhanced_sessions = []
-    
+    last_dt = None
+    current_date_ref = date(2025, 6, 18)
+    current_year_guess = current_date_ref.year  # start with reference year
+
     for date_str in sessions_list:
         try:
             parts = date_str.split('.')
-            if len(parts) == 2:
-                day = int(parts[0])
-                month = int(parts[1])
-                year = determine_year_from_date(day, month)
-                enhanced_date = f"{day:02d}.{month:02d}.{year}"
-                enhanced_sessions.append(enhanced_date)
-            else:
-                enhanced_sessions.append(date_str)  # Keep original if can't parse
-        except:
-            enhanced_sessions.append(date_str)  # Keep original if error
-    
-    # Sort chronologically
-    def date_sort_key(date_str):
-        try:
-            parts = date_str.split('.')
-            if len(parts) == 3:
-                day, month, year = int(parts[0]), int(parts[1]), int(parts[2])
-                return datetime(year, month, day)
-            elif len(parts) == 2:
-                day, month = int(parts[0]), int(parts[1])
-                year = determine_year_from_date(day, month)
-                return datetime(year, month, day)
-        except:
-            pass
-        return datetime(1900, 1, 1)  # Fallback
-    
-    return sorted(enhanced_sessions, key=date_sort_key)
+            if len(parts) != 2:
+                enhanced_sessions.append(date_str)
+                continue
+            day = int(parts[0])
+            month = int(parts[1])
+
+            # Initial year guess
+            year = determine_year_from_date(day, month, current_date_ref)
+            dt = datetime(year, month, day)
+
+            # Ensure ascending order; if this date would go back in time, push to next year(s)
+            if last_dt and dt < last_dt:
+                # increment year until chronological
+                while dt < last_dt:
+                    year += 1
+                    dt = datetime(year, month, day)
+            last_dt = dt
+            enhanced_sessions.append(dt.strftime("%d.%m.%Y"))
+        except Exception:
+            enhanced_sessions.append(date_str)
+
+    # Already in chronological order; no extra sort needed
+    return enhanced_sessions
 
 def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
     """
