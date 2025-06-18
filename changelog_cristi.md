@@ -3,4 +3,7 @@
 - Updated green cell parsing in `extract_sessions.py` to detect numeric-only text and ignore it; only non-numeric strings are now kept for the `extra` list.
 - Added handling for green cells without accompanying dates: these are now counted as additional paid sessions (undated) and therefore reduce the `remaining` sessions figure.
   * Introduced `undated_paid_count` per client.
-  * Stats and on-screen summary now include these undated paid sessions. 
+  * Stats and on-screen summary now include these undated paid sessions.
+- Replaced old `remaining` logic (package rounding) with exact count of undated paid sessions.
+  * Added `paid_used` and `paid_remaining` fields in stats for clarity.
+  * Updated summary log to reflect new breakdown. 

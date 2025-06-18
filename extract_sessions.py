@@ -265,11 +265,14 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
         enhanced_paid = enhance_session_dates(paid_sessions)
         enhanced_unpaid = enhance_session_dates(unpaid_sessions)
         
-        # Calculate stats (include undated paid sessions in totals)
-        total_paid_sessions = len(enhanced_paid) + undated_paid_count
+        # Calculate stats
+        #   • paid_used: dated green cells (sessions already taken)
+        #   • remaining: undated green cells (pre-paid sessions still available)
+        #   • unpaid:    orange cells with dates (taken but unpaid)
+        paid_used = len(enhanced_paid)
+        remaining = undated_paid_count  # Exactly how many undated paid sessions are left
+        total_paid_sessions = paid_used + remaining
         total = total_paid_sessions + len(enhanced_unpaid)
-        packages_needed = (total + 9) // 10  # Default package size = 10
-        remaining = (packages_needed * 10) - total
         
         # Add client data with enhanced dates
         client_data = {
@@ -278,8 +281,9 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
             "stats": {
                 "total": total,
                 "paid": total_paid_sessions,
-                "unpaid": len(enhanced_unpaid),
-                "remaining": remaining
+                "paid_used": paid_used,
+                "paid_remaining": remaining,
+                "unpaid": len(enhanced_unpaid)
             }
         }
         
@@ -290,7 +294,7 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
         clients_data["clients"][client_name] = client_data
         
         extra_count = len(extra_data) if extra_data else 0
-        print(f"  Summary: {total_paid_sessions} paid, {len(unpaid_sessions)} unpaid, {total} total" + (f", {extra_count} with extra text" if extra_count > 0 else ""))
+        print(f"  Summary: {paid_used} used, {remaining} remaining, {len(unpaid_sessions)} unpaid, {total} total" + (f", {extra_count} with extra text" if extra_count > 0 else ""))
     
     return clients_data
 
