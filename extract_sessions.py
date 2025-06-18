@@ -53,46 +53,64 @@ def determine_year_from_date(day, month, current_date: date = None, threshold_da
 def enhance_session_dates(sessions_list):
     """
     Enhance sessions with proper years and format as DD.MM.YYYY.
-    Assumes the input list is in chronological order (oldest → newest).
-    We first guess the year for each date, then ensure the resulting
-    datetimes are non-decreasing; if a date would go backwards, we bump the year.
+
+    Assumptions & rules:
+    1. The raw list is ordered chronologically (oldest → newest) *within the sheet*.
+    2. We start by assuming the first date belongs to *last* year.
+    3. While walking forward, if a new (day,month) would go backwards in time,
+       we bump its year forward until chronology is preserved.
+    4. After the pass, if every date is still in that initial year **and** the
+       timeline ends within `recent_threshold_days` of today, we realise the
+       client actually has only current-year data → shift every date +1 year.
     """
-    enhanced_sessions = []
-    last_dt = None
-    current_date_ref = CURRENT_DATE_REF
-    current_year_guess = current_date_ref.year  # start with reference year
+    recent_threshold_days = 90  # ~3 months
+    enhanced = []
 
-    for date_str in sessions_list:
+    if not sessions_list:
+        return enhanced
+
+    # Parse first date assuming previous year
+    first_parts = sessions_list[0].split('.')
+    if len(first_parts) != 2:
+        return sessions_list  # fallback
+    day1, month1 = map(int, first_parts)
+
+    start_year = CURRENT_DATE_REF.year - 1
+    dt_prev = datetime(start_year, month1, day1)
+    enhanced.append(dt_prev)
+
+    # Walk the rest
+    for date_str in sessions_list[1:]:
         try:
-            parts = date_str.split('.')
-            if len(parts) != 2:
-                enhanced_sessions.append(date_str)
-                continue
-            day = int(parts[0])
-            month = int(parts[1])
-
-            # Initial year guess
-            year = determine_year_from_date(day, month, current_date_ref)
-            dt = datetime(year, month, day)
-
-            # Ensure ascending order; if this date would go back in time, push to next year(s)
-            if last_dt and dt < last_dt:
-                while dt < last_dt:
-                    year += 1
-                    dt = datetime(year, month, day)
-
-            # Avoid future dates beyond today
-            today_dt = datetime.combine(CURRENT_DATE_REF, datetime.min.time())
-            while dt > today_dt:
-                year -= 1
-                dt = datetime(year, month, day)
-            last_dt = dt
-            enhanced_sessions.append(dt.strftime("%d.%m.%Y"))
+            d, m = map(int, date_str.split('.'))
+            year = dt_prev.year
+            candidate = datetime(year, m, d)
+            while candidate < dt_prev:
+                year += 1
+                candidate = datetime(year, m, d)
+            dt_prev = candidate
+            enhanced.append(candidate)
         except Exception:
-            enhanced_sessions.append(date_str)
+            # Keep as-is if parse error
+            enhanced.append(date_str)
 
-    # Already in chronological order; no extra sort needed
-    return enhanced_sessions
+    # Post-processing: if all datetimes, same year, and recent timeline → shift forward
+    if all(isinstance(x, datetime) for x in enhanced):
+        years = {x.year for x in enhanced}
+        if len(years) == 1:
+            year_only = next(iter(years))
+            if (CURRENT_DATE_REF - enhanced[-1].date()).days <= recent_threshold_days:
+                # Shift all forward by +1 year
+                enhanced = [x.replace(year=x.year + 1) for x in enhanced]
+
+    # Convert to strings, keep originals for any non-datetime entries
+    result = []
+    for item in enhanced:
+        if isinstance(item, datetime):
+            result.append(item.strftime("%d.%m.%Y"))
+        else:
+            result.append(item)
+    return result
 
 def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
     """
