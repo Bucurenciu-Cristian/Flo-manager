@@ -8,6 +8,9 @@ import openpyxl
 import json
 from datetime import datetime, date
 
+# NEW: global counter for processed clients
+processed_count = 0  # Will be updated by extract_client_sessions
+
 def determine_year_from_date(day, month, current_date=date(2025, 6, 18)):
     """
     Intelligently determine year based on timeline logic.
@@ -67,8 +70,10 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
     Pattern:
     - Row X: "Numele" in column B, client name in column C
     - Rows below: colored cells in columns D-M (green=paid, orange=unpaid)
-    - Row immediately below colored cells: dates
+    - Dates can be below OR above colored cells
+    - Green cells may contain text (stored in 'extra' property)
     """
+    global processed_count  # Use the module-level counter so we can print it later
     wb = openpyxl.load_workbook(excel_file_path, data_only=True)
     ws = wb.active
     
@@ -83,24 +88,64 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
         }
     }
     
-    # Find all "Numele" positions
+    # Find all "Numele" positions (check both column B and C for client names)
     numele_positions = []
+    processed_clients = set()  # Track processed clients to avoid duplicates
+    
     for row in range(1, ws.max_row + 1):
         cell_b = ws.cell(row=row, column=2)
+        cell_c = ws.cell(row=row, column=3)
+        
+        # Standard pattern: "Numele" in column B, client name in column C
         if cell_b.value and "Numele" in str(cell_b.value):
-            client_name = ws.cell(row=row, column=3).value
-            if client_name and str(client_name).strip():
+            client_name = cell_c.value
+            if client_name and str(client_name).strip() and str(client_name).strip() not in processed_clients:
                 numele_positions.append((row, str(client_name).strip()))
+                processed_clients.add(str(client_name).strip())
+        
+        # Check column after "Varsta si Greutatea" for additional clients
+        elif cell_b.value and "Varsta si Greutatea" in str(cell_b.value):
+            # Check column D (next column) for client name
+            cell_d = ws.cell(row=row, column=4)
+            if cell_d.value and str(cell_d.value).strip() and str(cell_d.value).strip() not in processed_clients:
+                numele_positions.append((row, str(cell_d.value).strip()))
+                processed_clients.add(str(cell_d.value).strip())
+        
+        # Also check if there's a client name directly in column C without "Numele" marker
+        elif cell_c.value and len(str(cell_c.value).strip()) > 2 and not str(cell_c.value).strip().isdigit():
+            # This might be a client name in a different format
+            potential_name = str(cell_c.value).strip()
+            if potential_name not in processed_clients and not any(x in potential_name.lower() for x in ['numele', 'varsta', 'greutatea', 'data']):
+                # Double check by looking for colored cells in nearby rows
+                has_colored_cells = False
+                for check_row in range(max(1, row-5), min(ws.max_row, row+10)):
+                    for col in range(4, 14):
+                        cell = ws.cell(row=check_row, column=col)
+                        if cell.fill and cell.fill.fgColor and cell.fill.fgColor.rgb:
+                            rgb = str(cell.fill.fgColor.rgb)
+                            if rgb in ["FF00FF00", "FFFF9900"] or "FF99" in rgb:
+                                has_colored_cells = True
+                                break
+                    if has_colored_cells:
+                        break
+                
+                if has_colored_cells:
+                    numele_positions.append((row, potential_name))
+                    processed_clients.add(potential_name)
     
-    print(f"Found {len(numele_positions)} clients, processing {max_clients} starting from {start_from}")
+    print(f"Found {len(numele_positions)} clients total, processing {min(max_clients, len(numele_positions)-start_from)} starting from position {start_from+1}")
     
     # Process clients from start_from to start_from + max_clients
     end_index = min(start_from + max_clients, len(numele_positions))
+    processed_count = 0
+    
     for i, (client_row, client_name) in enumerate(numele_positions[start_from:end_index]):
-        print(f"\n[{i+1}/{max_clients}] Processing: {client_name} (row {client_row})")
+        processed_count += 1
+        print(f"\n[{processed_count}/{min(max_clients, len(numele_positions)-start_from)}] Processing: {client_name} (row {client_row})")
         
         paid_sessions = []
         unpaid_sessions = []
+        extra_data = []  # Store text from green cells
         
         # Look for session data in the next 50 rows after client name
         actual_index = start_from + i
@@ -123,17 +168,56 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
                     
                     # Green cells = paid (FF00FF00)
                     if rgb == "FF00FF00":
-                        colored_cells.append((col, "paid"))
+                        cell_text_raw = cell.value
+                        # Only keep non-numeric text. If the cell contains something that can be
+                        # converted to a number (e.g. 30, 25.5, "30.0"), ignore it for the `extra` list.
+                        if cell_text_raw is not None and str(cell_text_raw).strip():
+                            cleaned_text = str(cell_text_raw).strip()
+                            # Detect numeric values (integers or floats, dot or comma as decimal)
+                            is_numeric = False
+                            try:
+                                # Replace comma with dot to support European decimals like "25,5"
+                                float(cleaned_text.replace(",", "."))
+                                # Succeeded => numeric
+                                is_numeric = True
+                            except ValueError:
+                                # Not a pure number
+                                pass
+                            if not is_numeric:
+                                colored_cells.append((col, "paid", cleaned_text))
+                            else:
+                                colored_cells.append((col, "paid", None))
+                        else:
+                            colored_cells.append((col, "paid", None))
                     # Orange/yellow cells = unpaid (FFFF9900 or similar)
                     elif rgb == "FFFF9900" or "FF99" in rgb or ("FFFF" in rgb[:4] and rgb != "FFFFFFFF"):
-                        colored_cells.append((col, "unpaid"))
+                        colored_cells.append((col, "unpaid", None))
             
-            # If we found colored cells, check the next row for dates
+            # If we found colored cells, check for dates (first below, then above if not found)
             if colored_cells:
-                date_row = row + 1
-                for col, session_type in colored_cells:
-                    date_cell = ws.cell(row=date_row, column=col)
-                    if date_cell.value:
+                for col_data in colored_cells:
+                    if len(col_data) == 3:
+                        col, session_type, cell_text = col_data
+                    else:
+                        col, session_type = col_data[0], col_data[1]
+                        cell_text = None
+                    
+                    # First check below (row + 1)
+                    date_cell_below = ws.cell(row=row + 1, column=col)
+                    date_cell_above = ws.cell(row=row - 1, column=col)
+                    
+                    date_found = False
+                    
+                    # Try below first
+                    if date_cell_below.value:
+                        date_cell = date_cell_below
+                        date_found = True
+                    # If not found below, try above
+                    elif date_cell_above.value:
+                        date_cell = date_cell_above
+                        date_found = True
+                    
+                    if date_found:
                         date_str = str(date_cell.value).strip()
                         
                         # Convert date format from "2024-06-10 00:00:00" to "10.6"
@@ -158,14 +242,20 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
                             
                             formatted_date = f"{day}.{month}"
                             
+                            # Store session data
                             if session_type == "paid":
                                 paid_sessions.append(formatted_date)
+                                # Store extra text if present
+                                if cell_text:
+                                    extra_data.append({"date": formatted_date, "text": cell_text})
                             else:
                                 unpaid_sessions.append(formatted_date)
                             
-                            print(f"  Found {session_type} session: {formatted_date}")
+                            print(f"  Found {session_type} session: {formatted_date}" + (f" (extra: {cell_text})" if cell_text else ""))
                         except Exception as e:
                             print(f"  Could not parse date: {date_str} - {e}")
+                    else:
+                        print(f"  No date found for {session_type} cell in column {col}")
         
         # Enhance dates with proper years and chronological sorting
         enhanced_paid = enhance_session_dates(paid_sessions)
@@ -177,7 +267,7 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
         remaining = (packages_needed * 10) - total
         
         # Add client data with enhanced dates
-        clients_data["clients"][client_name] = {
+        client_data = {
             "paid": enhanced_paid,
             "unpaid": enhanced_unpaid,
             "stats": {
@@ -188,7 +278,14 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
             }
         }
         
-        print(f"  Summary: {len(paid_sessions)} paid, {len(unpaid_sessions)} unpaid, {total} total")
+        # Add extra data if present
+        if extra_data:
+            client_data["extra"] = extra_data
+        
+        clients_data["clients"][client_name] = client_data
+        
+        extra_count = len(extra_data) if extra_data else 0
+        print(f"  Summary: {len(paid_sessions)} paid, {len(unpaid_sessions)} unpaid, {total} total" + (f", {extra_count} with extra text" if extra_count > 0 else ""))
     
     return clients_data
 
@@ -201,7 +298,7 @@ def save_to_json(data, output_file="sessions_extracted.json"):
 if __name__ == "__main__":
     try:
         print("Extracting session data for ALL clients...")
-        session_data = extract_client_sessions("excel.xlsx", max_clients=185, start_from=0)
+        session_data = extract_client_sessions("excel.xlsx", max_clients=220, start_from=0)
         
         # Save to JSON with enhanced dates
         save_to_json(session_data, "all_clients_sessions_enhanced.json")
@@ -230,19 +327,28 @@ if __name__ == "__main__":
         
         print(f"\n📋 Sample clients:")
         sample_count = 0
+        clients_with_extra = 0
         for name, info in session_data['clients'].items():
+            if 'extra' in info:
+                clients_with_extra += 1
             if sample_count >= 3:
-                break
+                continue
             stats = info['stats']
             if stats['total'] > 0:
                 paid_sample = info['paid'][:2] if info['paid'] else []
                 unpaid_sample = info['unpaid'][:1] if info['unpaid'] else []
+                extra_sample = info.get('extra', [])[:1] if info.get('extra') else []
                 print(f"  {name}: {stats['total']} sessions")
                 if paid_sample:
                     print(f"    Paid: {paid_sample}")
                 if unpaid_sample:
                     print(f"    Unpaid: {unpaid_sample}")
+                if extra_sample:
+                    print(f"    Extra: {extra_sample}")
                 sample_count += 1
+        
+        print(f"\n📝 Clients with extra text: {clients_with_extra}")
+        print(f"🔢 Total clients processed: {processed_count}")
         
     except Exception as e:
         print(f"Error: {e}")
