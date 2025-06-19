@@ -247,9 +247,10 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
         first_green_with_date_col = None
         
         # Find the very FIRST date chronologically (earliest position)
+        # Check both green (paid) and orange (unpaid) cells as valid starting points
         for row in range(client_row + 1, search_end):
             for col in range(4, 14):  # Check columns D-M left to right
-                # Check if there's a green cell here
+                # Check if there's a colored cell here
                 cell = ws.cell(row=row, column=col)
                 
                 if cell.fill and cell.fill.fgColor and cell.fill.fgColor.rgb:
@@ -259,7 +260,7 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
                     if rgb == "00000000" or rgb == "FFFFFFFF":
                         continue
                     
-                    # Check if it's a green cell (paid)
+                    # Check if it's a green cell (paid) OR orange cell (unpaid)
                     if rgb == "FF00FF00":
                         # Check if this green cell has a date
                         date_cell_below = ws.cell(row=row + 1, column=col)
@@ -270,6 +271,18 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
                             first_green_with_date_col = col
                             date_value = date_cell_below.value or date_cell_above.value
                             print(f"  🎯 FIRST date found at row {row}, col {col}, date: {date_value}")
+                            break
+                    # Also check orange/yellow cells (unpaid) as potential starting points
+                    elif rgb == "FFFF9900" or "FF99" in rgb or ("FFFF" in rgb[:4] and rgb != "FFFFFFFF"):
+                        # Check if this orange cell has a date
+                        date_cell_below = ws.cell(row=row + 1, column=col)
+                        date_cell_above = ws.cell(row=row - 1, column=col)
+                        
+                        if date_cell_below.value or date_cell_above.value:
+                            first_green_with_date_row = row
+                            first_green_with_date_col = col
+                            date_value = date_cell_below.value or date_cell_above.value
+                            print(f"  🎯 FIRST date found at row {row}, col {col}, date: {date_value} (ORANGE)")
                             break
             
             if first_green_with_date_row:
@@ -503,8 +516,12 @@ if __name__ == "__main__":
         print("=" * 50)
         print(f"✅ Total clients processed: {total_clients}")
         print(f"✅ Total sessions extracted: {total_sessions}")
-        print(f"📅 Sessions from 2024: {year_2024_count} ({year_2024_count/total_sessions*100:.1f}%)")
-        print(f"📅 Sessions from 2025: {year_2025_count} ({year_2025_count/total_sessions*100:.1f}%)")
+        if total_sessions > 0:
+            print(f"📅 Sessions from 2024: {year_2024_count} ({year_2024_count/total_sessions*100:.1f}%)")
+            print(f"📅 Sessions from 2025: {year_2025_count} ({year_2025_count/total_sessions*100:.1f}%)")
+        else:
+            print(f"📅 Sessions from 2024: {year_2024_count} (0.0%)")
+            print(f"📅 Sessions from 2025: {year_2025_count} (0.0%)")
         print(f"🗓️  Enhanced format: DD.MM.YYYY")
         print(f"📊 Logic: Dates after 18.6 → 2024, dates before/on 18.6 → 2025")
         
