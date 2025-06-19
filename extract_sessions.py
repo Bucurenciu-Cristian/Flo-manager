@@ -112,6 +112,40 @@ def enhance_session_dates(sessions_list):
             result.append(item)
     return result
 
+def find_previous_completed_sessions(ws, client_row, client_name):
+    """Find optional previous completed sessions number in Column C, 3-7 rows below client name."""
+    print(f"🔍 Searching for previous sessions in {client_name} section - Column C only, rows {client_row+3} to {client_row+7}")
+    
+    # Search only in Column C, 3-7 rows below client name
+    candidates = []
+    
+    for check_row in range(client_row + 3, client_row + 8):
+        col = 3  # Only Column C
+        cell = ws.cell(row=check_row, column=col)
+        if cell.value is not None:
+            try:
+                # Check if it's a standalone number (not a date)
+                value_str = str(cell.value).strip()
+                # More flexible number detection
+                if value_str.replace('.', '').replace(',', '').isdigit():
+                    num_val = int(float(value_str.replace(',', '.')))
+                    if 30 <= num_val <= 1000:  # Broader reasonable range
+                        candidates.append((num_val, check_row, col))
+                        print(f"  Found candidate: {num_val} at row {check_row}, col {col}")
+            except:
+                continue
+    
+    # If we found candidates, prefer ones closer to the client row
+    if candidates:
+        # Sort by distance from client row
+        candidates_sorted = sorted(candidates, key=lambda x: abs(x[1] - client_row))
+        best_candidate = candidates_sorted[0]
+        print(f"  Selected previous sessions: {best_candidate[0]} (Column C, row {best_candidate[1]})")
+        return best_candidate[0]
+    
+    print(f"  No previous sessions number found for {client_name} in Column C")
+    return 0
+
 def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
     """
     Extract client sessions from Excel file with proper color detection.
@@ -192,12 +226,14 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
         processed_count += 1
         print(f"\n[{processed_count}/{min(max_clients, len(numele_positions)-start_from)}] Processing: {client_name} (row {client_row})")
         
+        # Look for previous completed sessions in Column C, 3-7 rows below client name
+        previous_completed = find_previous_completed_sessions(ws, client_row, client_name)
+        print(f"Previous completed sessions: {previous_completed}")
+        
         paid_sessions = []
         unpaid_sessions = []
         extra_data = []  # Store text from green cells
         undated_paid_count = 0  # Count green cells with no date (pre-paid sessions remaining)
-        previous_completed = 0  # Number found left to the first green cell (historical sessions)
-        first_green_found = False
         
         # Look for session data in the next 50 rows after client name
         actual_index = start_from + i
@@ -237,16 +273,6 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
                                 pass
                             if not is_numeric:
                                 colored_cells.append((col, "paid", cleaned_text))
-                                # Capture previous completed sessions if this is the first green encountered for the client
-                                if not first_green_found and col > 4:
-                                    left_cell = ws.cell(row=row, column=col - 1)
-                                    if left_cell.value is not None:
-                                        try:
-                                            prev_val = str(left_cell.value).strip().replace(',', '.')
-                                            previous_completed = int(float(prev_val))
-                                        except ValueError:
-                                            previous_completed = 0
-                                    first_green_found = True
                             else:
                                 colored_cells.append((col, "paid", None))
                         else:
@@ -327,20 +353,29 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
         enhanced_unpaid = enhance_session_dates(unpaid_sessions)
         
         # Calculate stats
+        #   • previous_completed: sessions completed before this tracking method
         #   • paid_used: dated green cells (sessions already taken)
         #   • remaining: undated green cells (pre-paid sessions still available)
         #   • unpaid:    orange cells with dates (taken but unpaid)
-        paid_used = len(enhanced_paid) + previous_completed
+        paid_used = len(enhanced_paid)
         remaining = undated_paid_count  # Exactly how many undated paid sessions are left
         total_paid_sessions = paid_used + remaining
-        total = total_paid_sessions + len(enhanced_unpaid)
+        total_current = total_paid_sessions + len(enhanced_unpaid)
+        total_all_time = previous_completed + total_current
         
         # Add client data with enhanced dates
         client_data = {
             "paid": enhanced_paid,
             "unpaid": enhanced_unpaid,
             "stats": {
-                "total": total,
+                "previous_completed": previous_completed,
+                "current_paid_used": paid_used,
+                "current_remaining": remaining,
+                "current_unpaid": len(enhanced_unpaid),
+                "total_current": total_current,
+                "total_all_time": total_all_time,
+                # Legacy compatibility
+                "total": total_current,
                 "paid": total_paid_sessions,
                 "paid_used": paid_used,
                 "paid_remaining": remaining,
@@ -355,7 +390,7 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
         clients_data["clients"][client_name] = client_data
         
         extra_count = len(extra_data) if extra_data else 0
-        print(f"  Summary: {paid_used} used (including prev {previous_completed}), {remaining} remaining, {len(unpaid_sessions)} unpaid, {total} total" + (f", {extra_count} with extra text" if extra_count > 0 else ""))
+        print(f"  Summary: Previous={previous_completed}, Current={paid_used} used + {remaining} remaining + {len(enhanced_unpaid)} unpaid = {total_current}, Total={total_all_time}" + (f", {extra_count} with extra text" if extra_count > 0 else ""))
     
     return clients_data
 
@@ -378,10 +413,10 @@ def save_to_json(data, output_file="sessions_extracted.json"):
 if __name__ == "__main__":
     try:
         print("Extracting session data for ALL clients...")
-        session_data = extract_client_sessions("excel.xlsx", max_clients=220, start_from=0)
+        session_data = extract_client_sessions("excel.xlsx", max_clients=25, start_from=0)
         
         # Save to JSON with enhanced dates
-        save_to_json(session_data, "all_clients_sessions_enhanced.json")
+        save_to_json(session_data, "all_clients_sessions_column_c_test.json")
         
         # Print enhancement summary
         total_clients = len(session_data['clients'])
