@@ -57,7 +57,7 @@ def get_overview_stats(data: Dict[str, Any]) -> Dict[str, Any]:
     total_unpaid = sum(c['stats']['currentUnpaid'] for c in clients)
     
     # Financial calculations (assuming average session price)
-    avg_session_price = 100  # Lei per session (configurable)
+    avg_session_price = 30  # Lei per session (configurable)
     revenue_from_paid = total_paid_used * avg_session_price
     potential_revenue_remaining = total_remaining * avg_session_price
     outstanding_unpaid = total_unpaid * avg_session_price

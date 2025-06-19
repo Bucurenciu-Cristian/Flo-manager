@@ -1,0 +1,20 @@
+{
+  "generated_at": "2025-06-19T17:27:19.453599",
+  "overview": {
+    "total_clients": 189,
+    "active_clients": 181,
+    "clients_with_previous": 41,
+    "clients_with_unpaid": 7,
+    "total_sessions_current": 4858,
+    "total_sessions_all_time": 9255,
+    "total_previous_sessions": 4397,
+    "total_paid_used": 4208,
+    "total_remaining": 638,
+    "total_unpaid": 12,
+    "revenue_from_paid": 126240,
+    "potential_revenue_remaining": 19140,
+    "outstanding_unpaid": 360,
+    "avg_session_price": 30
+  },
+  "export_note": "Detailed statistics exported from fitness_stats.py"
+}
