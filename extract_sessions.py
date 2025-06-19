@@ -238,14 +238,82 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
         # Look for session data in the next 50 rows after client name
         actual_index = start_from + i
         next_client_row = numele_positions[actual_index + 1][0] if actual_index + 1 < len(numele_positions) else ws.max_row
-        search_end = min(client_row + 50, next_client_row)
+        search_end = min(client_row + 80, next_client_row)
+        print(f"  Search range: rows {client_row+1} to {search_end} (next client at {next_client_row})")
         
+        # STEP 1: Find the first green cell with a date to establish reference point
+        # Strategy: Find the first ROW that has any dates, then find the leftmost green cell in that row
+        first_green_with_date_row = None
+        first_green_with_date_col = None
+        
+        # Find the very FIRST date chronologically (earliest position)
+        for row in range(client_row + 1, search_end):
+            for col in range(4, 14):  # Check columns D-M left to right
+                # Check if there's a green cell here
+                cell = ws.cell(row=row, column=col)
+                
+                if cell.fill and cell.fill.fgColor and cell.fill.fgColor.rgb:
+                    rgb = str(cell.fill.fgColor.rgb)
+                    
+                    # Skip default/empty colors
+                    if rgb == "00000000" or rgb == "FFFFFFFF":
+                        continue
+                    
+                    # Check if it's a green cell (paid)
+                    if rgb == "FF00FF00":
+                        # Check if this green cell has a date
+                        date_cell_below = ws.cell(row=row + 1, column=col)
+                        date_cell_above = ws.cell(row=row - 1, column=col)
+                        
+                        if date_cell_below.value or date_cell_above.value:
+                            first_green_with_date_row = row
+                            first_green_with_date_col = col
+                            date_value = date_cell_below.value or date_cell_above.value
+                            print(f"  🎯 FIRST date found at row {row}, col {col}, date: {date_value}")
+                            break
+            
+            if first_green_with_date_row:
+                break
+        
+        if not first_green_with_date_row:
+            print(f"  ❌ No green cells with dates found for {client_name}")
+            # Create empty client data
+            client_data = {
+                "paid": [],
+                "unpaid": [],
+                "stats": {
+                    "previous_completed": previous_completed,
+                    "current_paid_used": 0,
+                    "current_remaining": 0,
+                    "current_unpaid": 0,
+                    "total_current": 0,
+                    "total_all_time": previous_completed,
+                    # Legacy compatibility
+                    "total": 0,
+                    "paid": 0,
+                    "paid_used": 0,
+                    "paid_remaining": 0,
+                    "unpaid": 0
+                }
+            }
+            clients_data["clients"][client_name] = client_data
+            print(f"  Summary: Previous={previous_completed}, Current=0 used + 0 remaining + 0 unpaid = 0, Total={previous_completed}")
+            continue
+        
+        # STEP 2: Count sessions only from the first green cell with date onwards
         for row in range(client_row + 1, search_end):
             # Check for colored cells in columns D-M (4-13)
             colored_cells = []
             
             for col in range(4, 14):  # Columns D-M
                 cell = ws.cell(row=row, column=col)
+                
+                # Only count cells at or after the first green cell with date
+                if row < first_green_with_date_row or (row == first_green_with_date_row and col < first_green_with_date_col):
+                    continue
+                
+                # Simplified debug: just count
+                # (removed detailed per-cell logging for cleaner output)
                 
                 if cell.fill and cell.fill.fgColor and cell.fill.fgColor.rgb:
                     rgb = str(cell.fill.fgColor.rgb)
@@ -413,7 +481,7 @@ def save_to_json(data, output_file="sessions_extracted.json"):
 if __name__ == "__main__":
     try:
         print("Extracting session data for ALL clients...")
-        session_data = extract_client_sessions("excel.xlsx", max_clients=25, start_from=0)
+        session_data = extract_client_sessions("excel.xlsx", max_clients=1, start_from=5)
         
         # Save to JSON with enhanced dates
         save_to_json(session_data, "all_clients_sessions_column_c_test.json")
