@@ -8,33 +8,30 @@ This is a **fitness training session data extraction tool** that processes Excel
 
 **Business Context**: A fitness trainer uses an Excel spreadsheet to track client sessions. Each client has colored cells indicating payment status (green = paid, orange/yellow = unpaid) with dates stored below the colored cells. The tool extracts this data into a structured format for reporting and billing purposes.
 
-## Project Structure - FINAL VERSION
+## Project Structure - CURRENT VERSION
 
 ```
 /scripts/
 ├── excel.xlsx                          # Source Excel file with client training data (409KB)
 ├── extract_sessions.py                 # 🎯 PRODUCTION SCRIPT - Final version
-├── all_clients_sessions_final.json     # 📊 PRODUCTION OUTPUT - Complete analytics
-├── FINAL_VERSION_DOCS.md               # 📚 Complete documentation
+├── fitness_sessions_api.json           # 🌟 CURRENT PRODUCTION - Next.js optimized (191 clients)
+├── all_clients_sessions_final.json     # 📊 Backend/Legacy format (191 clients)
+├── FINAL_VERSION_DOCS.md               # 📚 Complete technical documentation
+├── JSON_EVOLUTION_DOCS.md              # 📋 JSON format evolution and migration guide
 ├── CLAUDE.md                           # This file - project instructions
 └── DEVELOPMENT_JOURNEY.md              # Development history
 
-# Outdated files (for cleanup):
-├── extract.py                          # Original script (deprecated)
-├── all_clients_sessions.json           # Old output format
-├── all_clients_sessions_enhanced.json  # Intermediate version
-├── file.json                           # Reference validation data
-├── extract_sessions_new.py             # Development version
-├── test_new_logic.json                 # Development test file
-└── test_results_new_logic.log          # Development logs
+# Outdated files (cleaned up):
+# ❌ extract.py, all_clients_sessions.json, all_clients_sessions_enhanced.json
+# ❌ file.json, extract_sessions_new.py, test_new_logic.json, test_results_new_logic.log
 ```
 
 ## Main Script: extract_sessions.py - FINAL VERSION
 
-**This is the production-ready script** - fully tested with 189 clients and comprehensive edge case handling.
+**This is the production-ready script** - fully tested with 191 clients and comprehensive edge case handling.
 
-### Key Features - FINAL VERSION
-- ✅ Extracts all 189 clients from Excel file
+### Key Features - CURRENT VERSION
+- ✅ Extracts all 191 clients from Excel file (including edge cases like Delia Marginean)
 - ✅ **Column C Previous Sessions Detection**: Captures historical session counts (e.g., 230 previous sessions)
 - ✅ **First Date Reference Point Logic**: Eliminates template cells, counts only actual sessions
 - ✅ **Orange Cell Support**: Handles unpaid-only clients (FFFF9900 RGB)
@@ -75,7 +72,47 @@ python extract_sessions.py
 session_data = extract_client_sessions("excel.xlsx", max_clients=1, start_from=5)
 ```
 
-## Expected Output Format - FINAL VERSION
+## Output Files - CURRENT VERSION
+
+### 🌟 Primary Output: `fitness_sessions_api.json` (Frontend-Ready)
+**For Next.js development** - Array-based structure with ISO dates and camelCase properties:
+
+```json
+{
+  "clients": [
+    {
+      "id": "delia-marginean",
+      "name": "Delia Marginean",
+      "sessions": {
+        "paid": [
+          {"date": "2024-01-08", "formatted": "08.01.2024"},
+          {"date": "2024-01-10", "formatted": "10.01.2024"}
+        ],
+        "unpaid": [
+          {"date": "2024-06-11", "formatted": "11.06.2024"}
+        ]
+      },
+      "stats": {
+        "previousCompleted": 0,
+        "currentPaidUsed": 30,
+        "currentRemaining": 0,
+        "currentUnpaid": 1,
+        "totalCurrent": 31,
+        "totalAllTime": 31
+      },
+      "lastUpdated": "2025-06-19"
+    }
+  ],
+  "metadata": {
+    "totalClients": 191,
+    "generatedAt": "2025-06-19T10:30:00Z",
+    "version": "1.0"
+  }
+}
+```
+
+### 📊 Legacy Output: `all_clients_sessions_final.json` (Backend Compatibility)
+**For backend processing** - Object-based structure with comma-separated dates:
 
 ```json
 {

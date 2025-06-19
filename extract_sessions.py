@@ -481,19 +481,132 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
     return clients_data
 
 def save_to_json(data, output_file="sessions_extracted.json"):
-    """Save the extracted data to a JSON file."""
-    # Produce a shallow copy so we don't mutate the original in-memory results
-    data_copy = copy.deepcopy(data)
-
-    # Join paid/unpaid date lists into single comma-separated strings for compactness
-    for client_data in data_copy['clients'].values():
+    """Save the extracted data to a JSON file optimized for Next.js frontend."""
+    
+    # Transform data structure for better frontend usability
+    clients_array = []
+    
+    for client_name, client_data in data['clients'].items():
+        # Create slug-style ID from name
+        client_id = client_name.lower().replace(' ', '-').replace('ă', 'a').replace('â', 'a').replace('î', 'i').replace('ș', 's').replace('ț', 't')
+        
+        # Transform sessions to structured format
+        paid_sessions = []
+        unpaid_sessions = []
+        
+        # Handle both list and string formats
         if isinstance(client_data.get('paid'), list):
-            client_data['paid'] = ", ".join(client_data['paid'])
+            for date_str in client_data['paid']:
+                if date_str.strip():  # Skip empty dates
+                    # Convert DD.MM.YYYY to YYYY-MM-DD for JavaScript Date compatibility
+                    try:
+                        parts = date_str.split('.')
+                        if len(parts) == 3:
+                            iso_date = f"{parts[2]}-{parts[1].zfill(2)}-{parts[0].zfill(2)}"
+                            paid_sessions.append({
+                                "date": iso_date,
+                                "formatted": date_str
+                            })
+                    except:
+                        # Fallback for malformed dates
+                        paid_sessions.append({
+                            "date": date_str,
+                            "formatted": date_str
+                        })
+        elif isinstance(client_data.get('paid'), str) and client_data['paid'].strip():
+            # Handle comma-separated string format
+            for date_str in client_data['paid'].split(', '):
+                if date_str.strip():
+                    try:
+                        parts = date_str.split('.')
+                        if len(parts) == 3:
+                            iso_date = f"{parts[2]}-{parts[1].zfill(2)}-{parts[0].zfill(2)}"
+                            paid_sessions.append({
+                                "date": iso_date,
+                                "formatted": date_str
+                            })
+                    except:
+                        paid_sessions.append({
+                            "date": date_str,
+                            "formatted": date_str
+                        })
+        
+        # Same logic for unpaid sessions
         if isinstance(client_data.get('unpaid'), list):
-            client_data['unpaid'] = ", ".join(client_data['unpaid'])
+            for date_str in client_data['unpaid']:
+                if date_str.strip():
+                    try:
+                        parts = date_str.split('.')
+                        if len(parts) == 3:
+                            iso_date = f"{parts[2]}-{parts[1].zfill(2)}-{parts[0].zfill(2)}"
+                            unpaid_sessions.append({
+                                "date": iso_date,
+                                "formatted": date_str
+                            })
+                    except:
+                        unpaid_sessions.append({
+                            "date": date_str,
+                            "formatted": date_str
+                        })
+        elif isinstance(client_data.get('unpaid'), str) and client_data['unpaid'].strip():
+            for date_str in client_data['unpaid'].split(', '):
+                if date_str.strip():
+                    try:
+                        parts = date_str.split('.')
+                        if len(parts) == 3:
+                            iso_date = f"{parts[2]}-{parts[1].zfill(2)}-{parts[0].zfill(2)}"
+                            unpaid_sessions.append({
+                                "date": iso_date,
+                                "formatted": date_str
+                            })
+                    except:
+                        unpaid_sessions.append({
+                            "date": date_str,
+                            "formatted": date_str
+                        })
+        
+        # Clean up stats - use camelCase and remove legacy fields
+        stats = client_data.get('stats', {})
+        clean_stats = {
+            "previousCompleted": stats.get('previous_completed', 0),
+            "currentPaidUsed": stats.get('current_paid_used', 0),
+            "currentRemaining": stats.get('current_remaining', 0),
+            "currentUnpaid": stats.get('current_unpaid', 0),
+            "totalCurrent": stats.get('total_current', 0),
+            "totalAllTime": stats.get('total_all_time', 0)
+        }
+        
+        # Build client object
+        client_obj = {
+            "id": client_id,
+            "name": client_name,
+            "sessions": {
+                "paid": paid_sessions,
+                "unpaid": unpaid_sessions
+            },
+            "stats": clean_stats,
+            "lastUpdated": data.get('updated', datetime.now().strftime("%Y-%m-%d"))
+        }
+        
+        # Add extra data if present
+        if 'extra' in client_data:
+            client_obj['extra'] = client_data['extra']
+        
+        clients_array.append(client_obj)
+    
+    # Create frontend-optimized structure
+    frontend_data = {
+        "clients": clients_array,
+        "metadata": {
+            "totalClients": len(clients_array),
+            "generatedAt": datetime.now().isoformat() + "Z",
+            "version": "1.0",
+            "dateEnhancement": data.get('date_enhancement', {})
+        }
+    }
 
     with open(output_file, 'w', encoding='utf-8') as f:
-        json.dump(data_copy, f, indent=2, ensure_ascii=False)
+        json.dump(frontend_data, f, indent=2, ensure_ascii=False)
     print(f"\nData saved to {output_file}")
 
 if __name__ == "__main__":
@@ -502,7 +615,7 @@ if __name__ == "__main__":
         session_data = extract_client_sessions("excel.xlsx", max_clients=189, start_from=0)
         
         # Save to JSON with enhanced dates
-        save_to_json(session_data, "all_clients_sessions_final.json")
+        save_to_json(session_data, "fitness_sessions_api.json")
         
         # Print enhancement summary
         total_clients = len(session_data['clients'])
