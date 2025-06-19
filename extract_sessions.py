@@ -481,10 +481,10 @@ def save_to_json(data, output_file="sessions_extracted.json"):
 if __name__ == "__main__":
     try:
         print("Extracting session data for ALL clients...")
-        session_data = extract_client_sessions("excel.xlsx", max_clients=1, start_from=5)
+        session_data = extract_client_sessions("excel.xlsx", max_clients=189, start_from=0)
         
         # Save to JSON with enhanced dates
-        save_to_json(session_data, "all_clients_sessions_column_c_test.json")
+        save_to_json(session_data, "all_clients_sessions_final.json")
         
         # Print enhancement summary
         total_clients = len(session_data['clients'])
