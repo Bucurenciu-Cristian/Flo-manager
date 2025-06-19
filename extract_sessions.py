@@ -188,11 +188,16 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
         
         # Check column after "Varsta si Greutatea" for additional clients
         elif cell_b.value and "Varsta si Greutatea" in str(cell_b.value):
-            # Check column D (next column) for client name
-            cell_d = ws.cell(row=row, column=4)
-            if cell_d.value and str(cell_d.value).strip() and not _is_numeric_string(str(cell_d.value)) and str(cell_d.value).strip() not in processed_clients:
-                numele_positions.append((row, str(cell_d.value).strip()))
-                processed_clients.add(str(cell_d.value).strip())
+            # Check both column C and D for client name
+            for check_col in [3, 4]:  # Check columns C and D
+                cell_check = ws.cell(row=row, column=check_col)
+                if cell_check.value and str(cell_check.value).strip() and not _is_numeric_string(str(cell_check.value)) and str(cell_check.value).strip() not in processed_clients:
+                    client_name_candidate = str(cell_check.value).strip()
+                    # Validate it's not a header or unwanted text
+                    if not any(x in client_name_candidate.lower() for x in ['varsta', 'greutatea', 'motivatia', 'data']):
+                        numele_positions.append((row, client_name_candidate))
+                        processed_clients.add(client_name_candidate)
+                        break  # Only take the first valid name found
         
         # Also check if there's a client name directly in column C without "Numele" marker
         elif cell_c.value and len(str(cell_c.value).strip()) > 2 and not _is_numeric_string(str(cell_c.value)):
