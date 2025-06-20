@@ -235,6 +235,76 @@ See project structure above for outdated files that should be removed after revi
 - `test_new_logic.json` (development test file)
 - `test_results_new_logic.log` (development logs)
 
+## Script Configuration - REFACTORED VERSION
+
+### Configurable Constants (Added 2025-06-20)
+The script now includes a **configuration section** at the top for easy parameter tuning and experimentation:
+
+#### File Paths
+```python
+EXCEL_FILE_PATH = "excel.xlsx"                    # Source Excel file
+OUTPUT_FILE_LEGACY = "all_clients_sessions_final.json"   # Backend format
+OUTPUT_FILE_API = "fitness_sessions_api.json"            # Frontend format
+```
+
+#### Processing Controls
+```python
+MAX_CLIENTS = 189                    # Maximum clients to process (set to 5 for testing)
+START_FROM = 0                       # Starting position (0-based index)
+SEARCH_ROWS_PER_CLIENT = 80         # Rows to search below each client name
+```
+
+#### Date Logic Parameters
+```python
+RECENT_THRESHOLD_DAYS = 90          # Days to consider "recent" for year determination
+YEAR_THRESHOLD_DAYS = 183           # Days back for previous year assignment
+```
+
+#### Excel Structure Constants
+```python
+SESSION_COLUMNS_START = 4           # Column D (session data start)
+SESSION_COLUMNS_END = 14            # Column M (session data end, exclusive)
+PREVIOUS_SESSIONS_SEARCH_START = 3  # Start searching 3 rows below client
+PREVIOUS_SESSIONS_SEARCH_END = 8    # End searching 7 rows below client (exclusive)
+```
+
+#### Validation Ranges
+```python
+MIN_PREVIOUS_SESSIONS = 30          # Minimum valid previous session count
+MAX_PREVIOUS_SESSIONS = 1000        # Maximum valid previous session count
+```
+
+#### Color Codes
+```python
+COLOR_PAID_GREEN = "FF00FF00"       # Green cells = paid sessions
+COLOR_UNPAID_ORANGE = "FFFF9900"    # Orange cells = unpaid sessions
+COLOR_DEFAULT_BLACK = "00000000"    # Default/empty colors to skip
+COLOR_DEFAULT_WHITE = "FFFFFFFF"    # Default/empty colors to skip
+```
+
+### Usage Examples with Configuration
+
+**Quick testing (5 clients):**
+```python
+# Modify constants at top of script:
+MAX_CLIENTS = 5
+START_FROM = 0
+```
+
+**Adjust search sensitivity:**
+```python
+# Expand search range for complex layouts:
+SEARCH_ROWS_PER_CLIENT = 120
+PREVIOUS_SESSIONS_SEARCH_END = 12  # Search deeper for previous sessions
+```
+
+**Date logic tuning:**
+```python
+# Adjust year assignment logic:
+RECENT_THRESHOLD_DAYS = 60     # More conservative recent threshold
+YEAR_THRESHOLD_DAYS = 200      # Longer lookback period
+```
+
 ## Production Readiness - FINAL VERSION
 ✅ **Status**: Production-ready  
 ✅ **Testing**: Comprehensive validation with 7 diverse client scenarios  
@@ -242,3 +312,4 @@ See project structure above for outdated files that should be removed after revi
 ✅ **Performance**: Optimized for 189+ clients  
 ✅ **Documentation**: Complete technical and user documentation  
 ✅ **Error Handling**: Robust fallbacks and validation
+✅ **Configurability**: Easy parameter tuning via constants section (Added 2025-06-20)
