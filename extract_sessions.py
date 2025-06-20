@@ -9,6 +9,44 @@ import json
 import copy
 from datetime import datetime, date
 
+# =============================================================================
+# CONFIGURATION CONSTANTS - Modify these to control script behavior
+# =============================================================================
+
+# File paths
+EXCEL_FILE_PATH = "excel.xlsx"
+OUTPUT_FILE_LEGACY = "all_clients_sessions_final.json"  
+OUTPUT_FILE_API = "fitness_sessions_api.json"
+
+# Processing limits
+MAX_CLIENTS = 200  # Maximum number of clients to process
+START_FROM = 0     # Starting position (0-based index)
+SEARCH_ROWS_PER_CLIENT = 80  # How many rows to search below each client name
+
+# Date logic parameters
+RECENT_THRESHOLD_DAYS = 90   # Days to consider "recent" for year determination
+YEAR_THRESHOLD_DAYS = 183    # Days back to consider for previous year assignment
+
+# Excel structure parameters
+SESSION_COLUMNS_START = 4    # Column D (1-based: D=4)
+SESSION_COLUMNS_END = 14     # Column M (1-based: M=13, range end is exclusive)
+PREVIOUS_SESSIONS_SEARCH_START = 3  # Start searching 3 rows below client name
+PREVIOUS_SESSIONS_SEARCH_END = 8    # End searching 7 rows below client name (exclusive)
+
+# Previous sessions validation
+MIN_PREVIOUS_SESSIONS = 30   # Minimum valid previous session count
+MAX_PREVIOUS_SESSIONS = 1000 # Maximum valid previous session count
+
+# Color codes (RGB values)
+COLOR_PAID_GREEN = "FF00FF00"     # Green cells = paid sessions
+COLOR_UNPAID_ORANGE = "FFFF9900"  # Orange cells = unpaid sessions
+COLOR_DEFAULT_BLACK = "00000000"  # Default/empty color to skip
+COLOR_DEFAULT_WHITE = "FFFFFFFF"  # Default/empty color to skip
+
+# =============================================================================
+# END CONFIGURATION
+# =============================================================================
+
 # NEW: global counter for processed clients
 processed_count = 0  # Will be updated by extract_client_sessions
 
@@ -20,7 +58,7 @@ def _is_numeric_string(value: str) -> bool:
     txt = value.strip().replace(',', '').replace('.', '')
     return txt.isdigit()
 
-def determine_year_from_date(day, month, current_date: date = None, threshold_days: int = 183):
+def determine_year_from_date(day, month, current_date: date = None, threshold_days: int = YEAR_THRESHOLD_DAYS):
     """
     Determine the correct year for a session date given only day & month.
 
@@ -63,7 +101,7 @@ def enhance_session_dates(sessions_list):
        timeline ends within `recent_threshold_days` of today, we realise the
        client actually has only current-year data → shift every date +1 year.
     """
-    recent_threshold_days = 90  # ~3 months
+    recent_threshold_days = RECENT_THRESHOLD_DAYS  # ~3 months
     enhanced = []
 
     if not sessions_list:
@@ -119,7 +157,7 @@ def find_previous_completed_sessions(ws, client_row, client_name):
     # Search only in Column C, 3-7 rows below client name
     candidates = []
     
-    for check_row in range(client_row + 3, client_row + 8):
+    for check_row in range(client_row + PREVIOUS_SESSIONS_SEARCH_START, client_row + PREVIOUS_SESSIONS_SEARCH_END):
         col = 3  # Only Column C
         cell = ws.cell(row=check_row, column=col)
         if cell.value is not None:
@@ -129,7 +167,7 @@ def find_previous_completed_sessions(ws, client_row, client_name):
                 # More flexible number detection
                 if value_str.replace('.', '').replace(',', '').isdigit():
                     num_val = int(float(value_str.replace(',', '.')))
-                    if 30 <= num_val <= 1000:  # Broader reasonable range
+                    if MIN_PREVIOUS_SESSIONS <= num_val <= MAX_PREVIOUS_SESSIONS:  # Broader reasonable range
                         candidates.append((num_val, check_row, col))
                         print(f"  Found candidate: {num_val} at row {check_row}, col {col}")
             except:
@@ -146,7 +184,7 @@ def find_previous_completed_sessions(ws, client_row, client_name):
     print(f"  No previous sessions number found for {client_name} in Column C")
     return 0
 
-def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
+def extract_client_sessions(excel_file_path=EXCEL_FILE_PATH, max_clients=MAX_CLIENTS, start_from=START_FROM):
     """
     Extract client sessions from Excel file with proper color detection.
     
@@ -240,10 +278,10 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
         extra_data = []  # Store text from green cells
         undated_paid_count = 0  # Count green cells with no date (pre-paid sessions remaining)
         
-        # Look for session data in the next 50 rows after client name
+        # Look for session data in the next rows after client name
         actual_index = start_from + i
         next_client_row = numele_positions[actual_index + 1][0] if actual_index + 1 < len(numele_positions) else ws.max_row
-        search_end = min(client_row + 80, next_client_row)
+        search_end = min(client_row + SEARCH_ROWS_PER_CLIENT, next_client_row)
         print(f"  Search range: rows {client_row+1} to {search_end} (next client at {next_client_row})")
         
         # STEP 1: Find the first green cell with a date to establish reference point
@@ -254,7 +292,7 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
         # Find the very FIRST date chronologically (earliest position)
         # Check both green (paid) and orange (unpaid) cells as valid starting points
         for row in range(client_row + 1, search_end):
-            for col in range(4, 14):  # Check columns D-M left to right
+            for col in range(SESSION_COLUMNS_START, SESSION_COLUMNS_END):  # Check columns D-M left to right
                 # Check if there's a colored cell here
                 cell = ws.cell(row=row, column=col)
                 
@@ -262,11 +300,11 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
                     rgb = str(cell.fill.fgColor.rgb)
                     
                     # Skip default/empty colors
-                    if rgb == "00000000" or rgb == "FFFFFFFF":
+                    if rgb == COLOR_DEFAULT_BLACK or rgb == COLOR_DEFAULT_WHITE:
                         continue
                     
                     # Check if it's a green cell (paid) OR orange cell (unpaid)
-                    if rgb == "FF00FF00":
+                    if rgb == COLOR_PAID_GREEN:
                         # Check if this green cell has a date
                         date_cell_below = ws.cell(row=row + 1, column=col)
                         date_cell_above = ws.cell(row=row - 1, column=col)
@@ -278,7 +316,7 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
                             print(f"  🎯 FIRST date found at row {row}, col {col}, date: {date_value}")
                             break
                     # Also check orange/yellow cells (unpaid) as potential starting points
-                    elif rgb == "FFFF9900" or "FF99" in rgb or ("FFFF" in rgb[:4] and rgb != "FFFFFFFF"):
+                    elif rgb == COLOR_UNPAID_ORANGE or "FF99" in rgb or ("FFFF" in rgb[:4] and rgb != COLOR_DEFAULT_WHITE):
                         # Check if this orange cell has a date
                         date_cell_below = ws.cell(row=row + 1, column=col)
                         date_cell_above = ws.cell(row=row - 1, column=col)
@@ -323,7 +361,7 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
             # Check for colored cells in columns D-M (4-13)
             colored_cells = []
             
-            for col in range(4, 14):  # Columns D-M
+            for col in range(SESSION_COLUMNS_START, SESSION_COLUMNS_END):  # Columns D-M
                 cell = ws.cell(row=row, column=col)
                 
                 # Only count cells at or after the first green cell with date
@@ -337,11 +375,11 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
                     rgb = str(cell.fill.fgColor.rgb)
                     
                     # Skip default/empty colors
-                    if rgb == "00000000" or rgb == "FFFFFFFF":
+                    if rgb == COLOR_DEFAULT_BLACK or rgb == COLOR_DEFAULT_WHITE:
                         continue
                     
                     # Green cells = paid (FF00FF00)
-                    if rgb == "FF00FF00":
+                    if rgb == COLOR_PAID_GREEN:
                         cell_text_raw = cell.value
                         # Only keep non-numeric text. If the cell contains something that can be
                         # converted to a number (e.g. 30, 25.5, "30.0"), ignore it for the `extra` list.
@@ -364,7 +402,7 @@ def extract_client_sessions(excel_file_path, max_clients=5, start_from=0):
                         else:
                             colored_cells.append((col, "paid", None))
                     # Orange/yellow cells = unpaid (FFFF9900 or similar)
-                    elif rgb == "FFFF9900" or "FF99" in rgb or ("FFFF" in rgb[:4] and rgb != "FFFFFFFF"):
+                    elif rgb == COLOR_UNPAID_ORANGE or "FF99" in rgb or ("FFFF" in rgb[:4] and rgb != COLOR_DEFAULT_WHITE):
                         colored_cells.append((col, "unpaid", None))
             
             # If we found colored cells, check for dates (first below, then above if not found)
@@ -612,10 +650,10 @@ def save_to_json(data, output_file="sessions_extracted.json"):
 if __name__ == "__main__":
     try:
         print("Extracting session data for ALL clients...")
-        session_data = extract_client_sessions("excel.xlsx", max_clients=189, start_from=0)
+        session_data = extract_client_sessions()
         
-        # Save to JSON with enhanced dates
-        save_to_json(session_data, "fitness_sessions_api.json")
+        # Save to JSON with enhanced dates  
+        save_to_json(session_data, OUTPUT_FILE_API)
         
         # Print enhancement summary
         total_clients = len(session_data['clients'])
